@@ -89,7 +89,9 @@ fn criterion_benchmark(c: &mut Criterion) {
                 b.iter(|| {
                     for dnode in dtree.traverse() {
                         let path = dnode.path();
-                        dtree.find_path(&path).expect("Failed to find data");
+                        dtree
+                            .find_path(&path, false)
+                            .expect("Failed to find data");
                     }
                 });
             },

@@ -1038,7 +1038,7 @@ impl<'a> DataTreeOwningRef<'a> {
         let raw = {
             match tree.new_path(path, value, options)? {
                 Some(node) => node.raw,
-                None => tree.find_path(path, output)?.raw,
+                None => tree.find_path(path, false)?.raw,
             }
         };
         Ok(unsafe { DataTreeOwningRef::from_raw(tree, raw) })
