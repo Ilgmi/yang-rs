@@ -11,7 +11,7 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
-use std::slice;
+use std::{ptr, slice};
 
 use crate::context::Context;
 use crate::error::{Error, Result};
@@ -22,6 +22,7 @@ use crate::schema::SchemaExtInstance;
 use crate::schema::{DataValue, SchemaModule, SchemaNode, SchemaNodeKind};
 use crate::utils::*;
 use libyang3_sys as ffi;
+use libyang3_sys::{lyd_new_opaq, lyd_new_opaq2};
 
 /// YANG data tree.
 #[derive(Debug)]
@@ -418,6 +419,74 @@ impl<'a> DataTree<'a> {
             context,
             raw: std::ptr::null_mut(),
         }
+    }
+
+    pub fn new_opaq_json(
+        context: &'a Context,
+        module: &str,
+        name: &str,
+        value: Option<&str>,
+    ) -> Result<Self> {
+        let module = CString::new(module).unwrap();
+        let name = CString::new(name).unwrap();
+        let value = match value {
+            Some(value) => CString::new(value).unwrap().as_ptr(),
+            None => std::ptr::null(),
+        };
+
+        let mut out: *mut ffi::lyd_node = ptr::null_mut();
+
+        let ret = unsafe {
+            lyd_new_opaq(
+                ptr::null_mut(),
+                context.raw,
+                name.as_ptr(),
+                value,
+                ptr::null(),
+                module.as_ptr(),
+                &mut out,
+            )
+        };
+
+        if ret != ffi::LY_ERR::LY_SUCCESS {
+            return Err(Error::new(context));
+        }
+
+        unsafe { Ok(DataTree::from_raw(context, out)) }
+    }
+
+    pub fn new_opaq_xml(
+        context: &'a Context,
+        module: &str,
+        name: &str,
+        value: Option<&str>,
+    ) -> Result<Self> {
+        let module_namespace = CString::new(module).unwrap();
+        let name = CString::new(name).unwrap();
+        let value = match value {
+            Some(value) => CString::new(value).unwrap().as_ptr(),
+            None => std::ptr::null(),
+        };
+
+        let mut out: *mut ffi::lyd_node = ptr::null_mut();
+
+        let ret = unsafe {
+            lyd_new_opaq2(
+                ptr::null_mut(),
+                context.raw,
+                name.as_ptr(),
+                value,
+                ptr::null(),
+                module_namespace.as_ptr(),
+                &mut out,
+            )
+        };
+
+        if ret != ffi::LY_ERR::LY_SUCCESS {
+            return Err(Error::new(context));
+        }
+
+        unsafe { Ok(DataTree::from_raw(context, out)) }
     }
 
     /// Returns a mutable raw pointer to the underlying C library representation
@@ -896,6 +965,14 @@ impl<'a> DataTree<'a> {
     pub fn traverse(&self) -> impl Iterator<Item = DataNodeRef<'_>> {
         let top = Siblings::new(self.reference());
         top.flat_map(|dnode| dnode.traverse())
+    }
+
+    pub fn insert_child(&mut self, node: &DataTree<'a>) -> Result<()> {
+        let ret = unsafe { ffi::lyd_insert_child(self.raw, node.raw) };
+        if ret != ffi::LY_ERR::LY_SUCCESS {
+            return Err(Error::new(self.context));
+        }
+        Ok(())
     }
 }
 
