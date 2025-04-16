@@ -129,14 +129,33 @@ bitflags! {
     /// - string value is copied and stored internally during any node creation
     pub struct NewValueCreationOptions: u32 {
 
+        /// Whether to use dynamic value or make a copy.
         const NEW_ANY_USE_VALUE   = ffi::LYD_NEW_ANY_USE_VALUE;
+        /// Whether to clear the default flag starting from parent, recursively all NP containers.
         const NEW_META_CLEAR_DFLT = ffi::LYD_NEW_META_CLEAR_DFLT;
+        /// Enables the creation of opaque nodes with some specific rules.
+        /// If the last node in the path is not uniquely defined ((leaf-)list without a predicate)
+        /// or has an invalid value (leaf/leaf-list), it is created as opaque. Otherwise
+        /// a regular node is created.
         const NEW_PATH_OPAQ       = ffi::LYD_NEW_PATH_OPAQ;
+        /// If the target node exists, is a leaf, and it is updated with a new value or its
+        /// default flag is changed, it is returned. If the target node exists and is not a leaf
+        /// or generally no change occurs in the parent tree, NULL is returned and no error set.
         const NEW_PATH_UPDATE     = ffi::LYD_NEW_PATH_UPDATE;
+        /// Consider opaque nodes normally when searching for existing nodes.
         const NEW_PATH_WITH_OPAQ  = ffi::LYD_NEW_PATH_WITH_OPAQ;
+        /// Interpret the provided leaf/leaf-list value as being in the binary LY_VALUE_LYB format,
+        /// to learn what exactly is expected see LYB Binary Format.
         const NEW_VAL_BIN         = ffi::LYD_NEW_VAL_BIN;
+        /// Interpret the provided leaf/leaf-list value as being in the canonical
+        /// (or JSON if no defined) LY_VALUE_CANON format. If it is not, it may lead to
+        /// unexpected behavior.
         const NEW_VAL_CANON       = ffi::LYD_NEW_VAL_CANON;
+        /// Flag in case the parent is RPC/Action. If value is 0, the input's data nodes of
+        /// the RPC/Action are taken into consideration. Otherwise, the output's data node is
+        /// going to be created.
         const NEW_VAL_OUTPUT      = ffi::LYD_NEW_VAL_OUTPUT;
+        /// Whether to perform only storing operation with no or minimum valitions
         const NEW_VAL_STORE_ONLY  = ffi::LYD_NEW_VAL_STORE_ONLY;
     }
 }
@@ -1809,8 +1828,14 @@ unsafe impl<'a> Binding<'a> for DataNodeRef<'a> {
 impl<'a> NodeIterable<'a> for DataNodeRef<'a> {
     fn parent(&self) -> Option<DataNodeRef<'a>> {
         // NOTE: can't use lyd_parent() since it's an inline function.
-        let rparent =
-            unsafe { &mut (*(*self.raw).parent).__bindgen_anon_1.node };
+        if self.raw.is_null() {
+            return None;
+        }
+        let parent_inner = unsafe { (*self.raw).parent };
+        if parent_inner.is_null() {
+            return None;
+        }
+        let rparent = unsafe { &mut (*parent_inner).__bindgen_anon_1.node };
         unsafe { DataNodeRef::from_raw_opt(self.tree, rparent) }
     }
 
